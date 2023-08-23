@@ -1,0 +1,21 @@
+WITH cohort AS (SELECT s.user_id,
+                			SUM(CASE WHEN s.flight_discount IS TRUE THEN 1 END)::NUMERIC / SUM(CASE WHEN s.flight_booked IS TRUE THEN 1 END) AS percent_with_discount,
+                      SUM(f.base_fare_usd - s.flight_discount_amount * f.base_fare_usd) / 
+       								SUM(haversine_distance(geos.home_airport_lat, geos.home_airport_lon, f.destination_airport_lat, f.destination_airport_lon)) AS ADS
+								FROM flights AS f INNER JOIN (SELECT DISTINCT home_airport, 
+                              											 home_airport_lat,
+                                                     home_airport_lon
+                              								FROM users) AS geos ON f.origin_airport = geos.home_airport
+								INNER JOIN sessions AS s ON f.trip_id = s.trip_id
+								WHERE s.session_start > '2023-01-04' AND s.user_id in (SELECT user_id
+                                                       								 FROM sessions
+                                                       								 GROUP BY user_id
+                                                       								 HAVING COUNT(session_id) > 7)
+								GROUP BY 1)                                                       
+SELECT user_id,
+				percent_with_discount,
+       (ADS - MIN(ADS) OVER()) / (MAX(ADS) OVER() - MIN(ADS) OVER()) AS ADS_scaled
+			 
+FROM cohort
+ORDER BY 1 
+;
